@@ -1,10 +1,3 @@
-/*
- * HD44780_LCD.c
- *
- *  Created on: Feb 3, 2024
- *      Author: ramys
- */
-
 #include "HD44780_LCD.h"
 
 // commands
@@ -43,7 +36,6 @@
 
 #define SendByte(cmd_data, value) Alcd_SendByte(lcd, cmd_data, value)
 
-
 #define PulseEn                     \
   do                                \
   {                                 \
@@ -54,32 +46,27 @@
   } while (0)
 
 /* Hardware interface functions */
-static void usDelay(uint16_t delay_us)
-{
+static void usDelay(uint16_t delay_us) {
 	DWT_Delay_us(delay_us);
 }
 /// the top 4 bits are ignored
 /// transfers the status of the 4-bit data to the hardware GPIO pins
-static void Write_HalfByte(Alcd_t *lcd, uint8_t HalfByte)
-{
+static void Write_HalfByte(Alcd_t *lcd, uint8_t HalfByte) {
 	lcd->Data_GPIO->ODR &= ~(0xf << lcd->Data_GPIO_Start_Pin);
 	lcd->Data_GPIO->ODR |= HalfByte << lcd->Data_GPIO_Start_Pin;
 }
 /// @brief 1 for set and 0 for reset
-static void RS_SET(Alcd_t *lcd, uint8_t R_S_Stat)
-{
+static void RS_SET(Alcd_t *lcd, uint8_t R_S_Stat) {
 	HAL_GPIO_WritePin(lcd->RS_GPIO, lcd->RS_GPIO_Pin, R_S_Stat);
 }
 /// @brief 1 for set and 0 for reset
-static void EN_SET(Alcd_t *lcd, uint8_t EN_Stat)
-{
+static void EN_SET(Alcd_t *lcd, uint8_t EN_Stat) {
 	HAL_GPIO_WritePin(lcd->EN_GPIO, lcd->EN_GPIO_Pin, EN_Stat);
 }
 
-static void Alcd_Init_GPIO(Alcd_t *lcd)
-{
-	GPIO_InitTypeDef G =
-	{ .Mode = GPIO_MODE_OUTPUT_PP, .Pin = lcd->RS_GPIO_Pin, .Speed = GPIO_SPEED_FREQ_LOW };
+static void Alcd_Init_GPIO(Alcd_t *lcd) {
+	GPIO_InitTypeDef G = { .Mode = GPIO_MODE_OUTPUT_PP, .Pin = lcd->RS_GPIO_Pin,
+			.Speed = GPIO_SPEED_FREQ_LOW };
 	HAL_GPIO_Init(lcd->RS_GPIO, &G);
 	G.Pin = lcd->EN_GPIO_Pin;
 	HAL_GPIO_Init(lcd->EN_GPIO, &G);
@@ -91,8 +78,7 @@ static void Alcd_Init_GPIO(Alcd_t *lcd)
 /* User Functions  */
 void Alcd_Display(Alcd_t *lcd, uint8_t ON_OFF);
 
-static inline void Alcd_SendByte(Alcd_t *lcd, uint8_t CMD_Data, uint8_t value)
-{
+static inline void Alcd_SendByte(Alcd_t *lcd, uint8_t CMD_Data, uint8_t value) {
 	RS_SET(lcd, CMD_Data);
 	// send the higher 4 bits
 	Write_HalfByte(lcd, value >> 4);
@@ -104,16 +90,14 @@ static inline void Alcd_SendByte(Alcd_t *lcd, uint8_t CMD_Data, uint8_t value)
 	;
 }
 
-void Alcd_Init(Alcd_t *lcd, uint8_t Lines, uint8_t Chars)
-{
+void Alcd_Init(Alcd_t *lcd, uint8_t Lines, uint8_t Chars) {
 	//INitialize the delay function using the ARM core cycle counter
 	DWT_Delay_Init();
 	Alcd_Init_GPIO(lcd);
-	uint8_t x;
 
-	lcd->RowOffsets[0] = 0;
+	lcd->RowOffsets[0] = 0x00;
 	lcd->RowOffsets[1] = 0x40;
-	lcd->RowOffsets[2] = 0 + Chars;
+	lcd->RowOffsets[2] = 0x00 + Chars; //lcd->RowOffsets[2] = 0x00 + lcd->Chars (without arguments)
 	lcd->RowOffsets[3] = 0x40 + Chars;
 
 	RS_SET(lcd, 0);
@@ -121,8 +105,7 @@ void Alcd_Init(Alcd_t *lcd, uint8_t Lines, uint8_t Chars)
 	usDelay(50000);
 
 	// init display in 4-bit mode
-	for (x = 0; x < 2; x++)
-	{
+	for (uint8_t x = 0; x < 2; x++) {
 		Write_HalfByte(lcd, 0x03);
 		PulseEn
 		;
@@ -147,78 +130,65 @@ void Alcd_Init(Alcd_t *lcd, uint8_t Lines, uint8_t Chars)
 	Alcd_Clear(lcd);
 }
 
-void Alcd_CursorAt(Alcd_t *lcd, uint8_t Row, uint8_t Col)
-{
+void Alcd_CursorAt(Alcd_t *lcd, uint8_t Row, uint8_t Col) {
 	SendByte(0, LCD_SETDDRAMADDR | (Col + lcd->RowOffsets[Row]));
 }
 
-void Alcd_Put_n(Alcd_t *lcd, char *text, uint8_t len)
-{
-	for (uint8_t x = 0; x < len; x++)
-	{
+void Alcd_Put_n(Alcd_t *lcd, char *text, uint8_t len) {
+	for (uint8_t x = 0; x < len; x++) {
 		SendByte(1, *(text++));
 	}
 }
 
-void Alcd_PutAt_n(Alcd_t *lcd, uint8_t Row, uint8_t Col, char *text, uint8_t len)
-{
+void Alcd_PutAt_n(Alcd_t *lcd, uint8_t Row, uint8_t Col, char *text,
+		uint8_t len) {
 	Alcd_CursorAt(lcd, Row, Col);
 	Alcd_Put_n(lcd, text, len);
 }
 
-void Alcd_Home(Alcd_t *lcd)
-{
+void Alcd_Home(Alcd_t *lcd) {
 	SendByte(0, LCD_RETURNHOME);
 	usDelay(2000);
 }
 
-void Alcd_Clear(Alcd_t *lcd)
-{
+void Alcd_Clear(Alcd_t *lcd) {
 	SendByte(0, LCD_CLEARDISPLAY);
 	usDelay(2000);
 }
 
-void Alcd_Display_Control(Alcd_t *lcd, uint8_t ON_OFF, uint8_t CUR_ON_OFF, uint8_t BLINK_ON_OFF)
-{
+void Alcd_Display_Control(Alcd_t *lcd, uint8_t ON_OFF, uint8_t CUR_ON_OFF,
+		uint8_t BLINK_ON_OFF) {
 	lcd->_displaycontrol = 0;
-	if (ON_OFF)
-	{
+	if (ON_OFF) {
 		lcd->_displaycontrol |= LCD_DISPLAYON;
 	}
-	if (CUR_ON_OFF)
-	{
+	if (CUR_ON_OFF) {
 		lcd->_displaycontrol |= LCD_CURSORON;
 	}
-	if (BLINK_ON_OFF)
-	{
+	if (BLINK_ON_OFF) {
 		lcd->_displaycontrol |= LCD_BLINKON;
 	}
 	lcd->_displaycontrol |= LCD_DISPLAYON;
 	SendByte(0, LCD_DISPLAYCONTROL | lcd->_displaycontrol);
 }
 
-void Alcd_CreateChar(Alcd_t *lcd, uint8_t Location, uint8_t Map[])
-{
+void Alcd_CreateChar(Alcd_t *lcd, uint8_t Location, uint8_t Map[]) {
 	uint8_t x = 0;
 	// only 8 locations are
 	Location &= 7;
 	SendByte(0, LCD_SETCGRAMADDR | (Location << 3));
-	for (x = 0; x < 8; x++)
-	{
+	for (x = 0; x < 8; x++) {
 		SendByte(1, Map[x]);
 	}
 }
 
-void Alcd_PutChar(Alcd_t *lcd, char chr)
-{
+void Alcd_PutChar(Alcd_t *lcd, char chr) {
 	SendByte(1, chr);
 }
 
-int Str_Len(char *string)
-{
+int Str_Len(char *string) {
 	int len = 0;
-	while (*(string++))
-	{
+	while (*(string++)) {
 		len++;
 	}
 	return len;
